@@ -1,0 +1,32 @@
+MAIN FOCUS: DATA DRIVEN WITHOUT COMPLEX MODEL (as little dropout as possible)
+
+
+
+1. zca whitening without data augmentation, optimizer: Adam(3e-4), no dropout -> NO GOOD
+2. Normalization(sample-wise mean), Adam(3e-4), dropout(0.2), augmentation:
+    - stateless_random_flip_left_right(img, seed=seed).numpy(),
+    - stateless_random_flip_up_down(img, seed=seed).numpy(),
+    - random_zoom(img, zoom_range=(0.7, 0.7), row_axis=0, col_axis=1, channel_axis=2),
+    - smart_resize(stateless_random_crop(img, size=(27, 27, 3), seed=seed), size=(32,32), interpolation="bicubic").numpy()
+    -> 0.81 - 0.82
+3a. Run again with 5 aug methods on computer, shuffle False -> not better
+3b. batch 32 -> Good
+4. batch 32, crop twice(27,24), regulalizer=l2(1e-5) -> Good 83%
+5. batch 64, crop twice(24,24), regulalizer=l2(1e-5), add rot90, dropout and spatialdropout2d also -> Better 84%
+6. batch 64, crop twice(24,24), add rot90, dropout and spatialdropout2d(0.3), no regulalizer -> Same, max acc is 0.8462 epoch 43, min loss 0.4953 epoch 21 
+7. same as 6, with shear 10-20, zoom 80% -> Same
+8. Same as 7, but batch size 16 instead of 64 -> No good, too much noise, even though it reach 84% more often, max loss < 0.8 
+
+9. Same as 6, but with Nadam(lr=0.001, beta_1=0.9, beta_2=0.999) -> Too noisy -> Try 0.0003 better but still no good max 83.8%
+128 batch size, lr=0.0005 -> Same
+
+9. SGD(learning_rate=0.0005, momentum=0.9) -> Too slow, still underfitting -> SGD(learning_rate=0.001, nesterov=True, momentum=0.9) -> Not so good, start to overfitting,
+max acc is 83%, at least the curve go nicer than Adam version
+10. Same as 7 but use optimizer in 9, batchsize=128 -> better max 84%
+11. Same as 10, but use more aug - zoom(rot90(k=3),zoom_range=(0.7, 0.7)) -> Same -> /255 before -> bad /255 only -> bad -> use 0.0007 instead -> not so good
+
+
+12. Add rot90(img, k=2) and zoom(rot90(k=3),zoom_range=(0.7, 0.7)) -> Not so good -> Decrease batch size to 64 -> Good again
+13. Add crop 28,24,20 -> Best -> , kernel_regularizer=l2(1e-4) -> Best -> 200 epochs, lr 0.0007 -> Cannot better 
+14. Use dropout(0.3) at 2 last conv blocks, no kernel_regularizer, lr 0.001 -> 86.62% best (val > train) -> higher learning rate -> Not good
+15. Remove rot90(img, k=2).numpy(), same everything else with the best so far, but use 300 epochs instead -> Almost as the current best -> Add back rot90() and use 300 epochs -> Just a bit better, loss can still decrease afterwards.
